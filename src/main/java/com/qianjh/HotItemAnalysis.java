@@ -68,7 +68,7 @@ public class HotItemAnalysis {
 
         Properties fromProps = new Properties();
         fromProps.setProperty("bootstrap.servers", parameter.getRequired(PARAM_KAFKA_FROM_URL));
-        fromProps.setProperty("group.id", "test-flink-gradle");
+        fromProps.setProperty("group.id", "test-flink");
         fromProps.setProperty("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
         fromProps.setProperty("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
         fromProps.setProperty("auto.offset.reset", "latest");
