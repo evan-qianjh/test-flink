@@ -83,13 +83,13 @@ public class HotItemAnalysis {
                 .map(x -> {
                     String[] s = x.split(",");
 
-                    UserBehavior entity = new UserBehavior();
-                    entity.setUserId(Long.valueOf(s[0].trim()));
-                    entity.setItemId(Long.valueOf(s[1].trim()));
-                    entity.setCategoryId(Long.valueOf(s[2].trim()));
-                    entity.setBehavior(s[3].trim());
-                    entity.setTimestamp(Long.valueOf(s[4].trim()));
-                    return entity;
+                    return UserBehavior.builder()
+                            .userId(Long.valueOf(s[0].trim()))
+                            .itemId(Long.valueOf(s[1].trim()))
+                            .categoryId(Long.valueOf(s[2].trim()))
+                            .behavior(s[3].trim())
+                            .timestamp(Long.valueOf(s[4].trim()))
+                            .build();
                 })
                 .assignTimestampsAndWatermarks(new AscendingTimestampExtractor<UserBehavior>() {
                     @Override
@@ -162,12 +162,11 @@ public class HotItemAnalysis {
     static class WindowResult implements WindowFunction<Long, ItemViewCount, Long, TimeWindow> {
         @Override
         public void apply(Long key, TimeWindow timeWindow, Iterable<Long> iterable, Collector<ItemViewCount> out) throws Exception {
-            ItemViewCount entity = new ItemViewCount();
-            entity.setItemId(key);
-            entity.setWindowEnd(timeWindow.getEnd());
-            entity.setCount(iterable.iterator().next());
-
-            out.collect(entity);
+            out.collect(ItemViewCount.builder()
+                    .itemId(key)
+                    .windowEnd(timeWindow.getEnd())
+                    .count(iterable.iterator().next())
+                    .build());
         }
     }
 
