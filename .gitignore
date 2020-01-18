@@ -22,6 +22,7 @@ build/
 *.log
 *.zip
 out/
+target/
 
 ### NetBeans ###
 /nbproject/private/
