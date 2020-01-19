@@ -2,6 +2,10 @@ package com.qianjh;
 
 import com.alibaba.fastjson.JSONObject;
 import com.qianjh.domain.LogTrack;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.apache.flink.api.common.functions.AggregateFunction;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.tuple.Tuple2;
@@ -9,9 +13,12 @@ import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.timestamps.AscendingTimestampExtractor;
 import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
 import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
+import org.apache.flink.util.Collector;
 
 import java.text.SimpleDateFormat;
 import java.util.Properties;
@@ -50,19 +57,43 @@ public class HotMediaTrack {
                 new TopicValueKafkaDeserializationSchema(),
                 fromProps);
         consumer.setStartFromLatest();
-        DataStream<LogTrack> dataSource = env.addSource(consumer).map(new TextToBean());
-        // TODO
-        dataSource.keyBy(LogTrack::getAppid)
-        // 每30秒统计过去十分钟数据
-        .timeWindow(Time.minutes(10), Time.seconds(30))
-//        .aggregate(new CountAgg())
+        DataStream<Tuple2<String, String>> dataSource = env.addSource(consumer);
 
+        // 转换为bean，指定业务时间
+        DataStream<LogTrack> dataStream = dataSource
+                .map(new TextToBean())
+                .assignTimestampsAndWatermarks(new AscendingTimestampExtractor<LogTrack>() {
+                    @Override
+                    public long extractAscendingTimestamp(LogTrack logTrack) {
+                        return logTrack.getReceiveTime();
+                    }
+                });
+
+        //
+        dataStream.keyBy(LogTrack::getAppid)
+                // 每30秒统计过去十分钟数据
+                .timeWindow(Time.minutes(10), Time.seconds(30))
+                .aggregate(new CountAgg())
+                .keyBy(MediaTrackCount::getWindowEnd)
+                .process()
+                .print()
+
+        ;
 
 
         env.execute("hot items job");
     }
 
-//    static  class WindowResult implements WindowFunction<Long, ItemV>
+    static class WindowResult implements WindowFunction<Long, MediaTrackCount, Long, TimeWindow> {
+        @Override
+        public void apply(Long mediaId, TimeWindow timeWindow, Iterable<Long> iterable, Collector<MediaTrackCount> collector) throws Exception {
+            collector.collect(MediaTrackCount.builder()
+                    .mediaId(mediaId)
+                    .windowEnd(timeWindow.getEnd())
+                    .count(iterable.iterator().next())
+                    .build());
+        }
+    }
 
     static class CountAgg implements AggregateFunction<LogTrack, Long, Long> {
 
@@ -72,18 +103,18 @@ public class HotMediaTrack {
         }
 
         @Override
-        public Long add(LogTrack logTrack, Long aLong) {
-            return null;
+        public Long add(LogTrack logTrack, Long acc) {
+            return acc + 1L;
         }
 
         @Override
-        public Long getResult(Long aLong) {
-            return null;
+        public Long getResult(Long acc) {
+            return acc;
         }
 
         @Override
-        public Long merge(Long aLong, Long acc1) {
-            return null;
+        public Long merge(Long acc0, Long acc1) {
+            return acc0 + acc1;
         }
     }
 
@@ -126,5 +157,15 @@ public class HotMediaTrack {
                     .receiveTime(receiveTime)
                     .build();
         }
+    }
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Builder(toBuilder = true)
+    static class MediaTrackCount {
+        private Long mediaId;
+        private Long windowEnd;
+        private Long count;
     }
 }
