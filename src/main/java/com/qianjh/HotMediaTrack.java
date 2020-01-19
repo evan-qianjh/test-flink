@@ -2,12 +2,15 @@ package com.qianjh;
 
 import com.alibaba.fastjson.JSONObject;
 import com.qianjh.domain.LogTrack;
+import org.apache.flink.api.common.functions.AggregateFunction;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
+import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 
 import java.text.SimpleDateFormat;
@@ -32,6 +35,7 @@ public class HotMediaTrack {
         env.setParallelism(1);
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 
+        // kafka配置
         Properties fromProps = new Properties();
         fromProps.setProperty("bootstrap.servers", parameter.getRequired(PARAM_KAFKA_FROM_URL));
         fromProps.setProperty("group.id", "test-flink");
@@ -39,25 +43,52 @@ public class HotMediaTrack {
         fromProps.setProperty("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
         fromProps.setProperty("auto.offset.reset", "latest");
 
+
         // 从kafka获取 dataSource
         FlinkKafkaConsumer<Tuple2<String, String>> consumer = new FlinkKafkaConsumer<>(
                 java.util.regex.Pattern.compile("log_track_\\S+"),
                 new TopicValueKafkaDeserializationSchema(),
                 fromProps);
         consumer.setStartFromLatest();
-        DataStream<Tuple2<String, String>> dataSource = env.addSource(consumer);
+        DataStream<LogTrack> dataSource = env.addSource(consumer).map(new TextToBean());
+        // TODO
+        dataSource.keyBy(LogTrack::getAppid)
+        // 每30秒统计过去十分钟数据
+        .timeWindow(Time.minutes(10), Time.seconds(30))
+//        .aggregate(new CountAgg())
 
-        dataSource
-                .map(new TextToBean())
-                // TODO
-        ;
 
 
         env.execute("hot items job");
     }
 
+//    static  class WindowResult implements WindowFunction<Long, ItemV>
+
+    static class CountAgg implements AggregateFunction<LogTrack, Long, Long> {
+
+        @Override
+        public Long createAccumulator() {
+            return 0L;
+        }
+
+        @Override
+        public Long add(LogTrack logTrack, Long aLong) {
+            return null;
+        }
+
+        @Override
+        public Long getResult(Long aLong) {
+            return null;
+        }
+
+        @Override
+        public Long merge(Long aLong, Long acc1) {
+            return null;
+        }
+    }
+
     /**
-     *
+     * 文本转换为bean
      */
     static class TextToBean implements MapFunction<Tuple2<String, String>, LogTrack> {
         @Override
