@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 @Builder(toBuilder = true)
 public class LogTrack {
     private String appid;
-    private String type;
+    private Integer type;
     private Long sendTime;
     private Long eventTime;
     private Long receiveTime;
