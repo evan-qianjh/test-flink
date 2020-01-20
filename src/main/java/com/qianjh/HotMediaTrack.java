@@ -88,7 +88,7 @@ public class HotMediaTrack {
         ;
 
 
-        env.execute("hot items job");
+        env.execute("media track count");
     }
 
     static class SortItems extends KeyedProcessFunction<Long, MediaTrackCount, String> {
