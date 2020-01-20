@@ -36,7 +36,7 @@ import org.apache.flink.streaming.api.functions.timestamps.AscendingTimestampExt
 import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
+import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer09;
 import org.apache.flink.util.Collector;
 
 import java.math.BigDecimal;
@@ -76,7 +76,7 @@ public class HotItemAnalysis {
         // 从文件获取
 //        DataStream<String> dataSource = env.readTextFile(FILE_PATH);
         // 从kafka获取
-        DataStream<String> dataSource = env.addSource(new FlinkKafkaConsumer<>("hot-items", new SimpleStringSchema(), fromProps));
+        DataStream<String> dataSource = env.addSource(new FlinkKafkaConsumer09<>("hot-items", new SimpleStringSchema(), fromProps));
 
         // 转换成pojo数据流
         DataStream<UserBehavior> dataStream = dataSource

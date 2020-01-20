@@ -21,7 +21,7 @@ import org.apache.flink.streaming.api.functions.timestamps.AscendingTimestampExt
 import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
+import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer09;
 import org.apache.flink.util.Collector;
 
 import java.sql.Timestamp;
@@ -60,7 +60,7 @@ public class HotMediaTrack {
 
 
         // 从kafka获取 dataSource
-        FlinkKafkaConsumer<Tuple2<String, String>> consumer = new FlinkKafkaConsumer<>(
+        FlinkKafkaConsumer09<Tuple2<String, String>> consumer = new FlinkKafkaConsumer09<>(
                 java.util.regex.Pattern.compile("log_track_\\S+"),
                 new TopicValueKafkaDeserializationSchema(),
                 fromProps);

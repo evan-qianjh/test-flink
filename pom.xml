@@ -49,7 +49,7 @@
 		<!-- Add connector dependencies here. They must be in the default scope (compile). -->
 		<dependency>
 			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-connector-kafka_${scala.binary.version}</artifactId>
+			<artifactId>flink-connector-kafka-0.9_${scala.binary.version}</artifactId>
 			<version>${flink.version}</version>
 		</dependency>
 
