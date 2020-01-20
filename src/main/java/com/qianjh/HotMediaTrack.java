@@ -86,7 +86,7 @@ public class HotMediaTrack {
         //
         dataStream
                 .keyBy("appid", "type")
-                .timeWindow(Time.minutes(5), Time.seconds(30))
+                .timeWindow(Time.seconds(30))
                 .aggregate(new CountAgg(), new WindowResult())
                 .addSink(new MySqlSink())
         ;
