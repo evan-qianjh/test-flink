@@ -8,11 +8,15 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.apache.flink.api.common.functions.AggregateFunction;
 import org.apache.flink.api.common.functions.MapFunction;
+import org.apache.flink.api.common.state.ListState;
+import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.utils.ParameterTool;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.streaming.api.functions.timestamps.AscendingTimestampExtractor;
 import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
 import org.apache.flink.streaming.api.windowing.time.Time;
@@ -20,7 +24,11 @@ import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 import org.apache.flink.util.Collector;
 
+import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Properties;
 
 /**
@@ -70,25 +78,66 @@ public class HotMediaTrack {
                 });
 
         //
-        dataStream.keyBy(LogTrack::getAppid)
-                // 每30秒统计过去十分钟数据
-                .timeWindow(Time.minutes(10), Time.seconds(30))
-                .aggregate(new CountAgg())
+        dataStream
+                .keyBy(LogTrack::getAppid)
+                .timeWindow(Time.minutes(1), Time.seconds(10))
+                .aggregate(new CountAgg(), new WindowResult())
                 .keyBy(MediaTrackCount::getWindowEnd)
-                .process()
+                .process(new SortItems())
                 .print()
-
         ;
 
 
         env.execute("hot items job");
     }
 
-    static class WindowResult implements WindowFunction<Long, MediaTrackCount, Long, TimeWindow> {
+    static class SortItems extends KeyedProcessFunction<Long, MediaTrackCount, String> {
+        ListState<MediaTrackCount> state;
+
         @Override
-        public void apply(Long mediaId, TimeWindow timeWindow, Iterable<Long> iterable, Collector<MediaTrackCount> collector) throws Exception {
+        public void open(Configuration parameters) throws Exception {
+            super.open(parameters);
+            state = getRuntimeContext().getListState(new ListStateDescriptor<>("media-state", MediaTrackCount.class));
+        }
+
+        @Override
+        public void processElement(MediaTrackCount mediaTrackCount, Context context, Collector<String> collector) throws Exception {
+            state.add(mediaTrackCount);
+            context.timerService().registerEventTimeTimer(mediaTrackCount.getWindowEnd() + 1);
+        }
+
+        @Override
+        public void onTimer(long timestamp, OnTimerContext ctx, Collector<String> out) throws Exception {
+            super.onTimer(timestamp, ctx, out);
+
+            List<MediaTrackCount> items = new ArrayList<>();
+            for (MediaTrackCount item : state.get()) {
+                items.add(item);
+            }
+
+            items.sort(Comparator.comparingLong(MediaTrackCount::getCount).reversed());
+            StringBuffer buffer = new StringBuffer()
+                    .append("time : ")
+                    .append(new Timestamp(timestamp - 1))
+                    .append("\n");
+
+            for (int i = 0; i < items.size(); i++) {
+                MediaTrackCount item = items.get(i);
+                buffer.append("No ").append(i + 1).append(" -> ").append(item.getAppid()).append(" : ").append(item.getCount()).append("\n");
+            }
+            buffer.append("=============================");
+
+            out.collect(buffer.toString());
+
+            state.clear();
+        }
+    }
+
+    static class WindowResult implements WindowFunction<Long, MediaTrackCount, String, TimeWindow> {
+        @Override
+        public void apply(String appid, TimeWindow timeWindow, Iterable<Long> iterable, Collector<MediaTrackCount> collector) throws Exception {
             collector.collect(MediaTrackCount.builder()
-                    .mediaId(mediaId)
+                    .appid(appid)
                     .windowEnd(timeWindow.getEnd())
                     .count(iterable.iterator().next())
                     .build());
@@ -164,7 +213,7 @@ public class HotMediaTrack {
     @NoArgsConstructor
     @Builder(toBuilder = true)
     static class MediaTrackCount {
-        private Long mediaId;
+        private String appid;
         private Long windowEnd;
         private Long count;
     }
