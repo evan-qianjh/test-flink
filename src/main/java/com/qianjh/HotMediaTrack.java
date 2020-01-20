@@ -25,9 +25,9 @@ import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer09;
 import org.apache.flink.util.Collector;
 
 import java.sql.Connection;
-import java.sql.Date;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.Timestamp;
 import java.util.Properties;
 
 /**
@@ -115,7 +115,7 @@ public class HotMediaTrack {
         public void invoke(LogTrackPoint value, Context context) throws Exception {
             String sql = "insert into log_track_point (`time`, `appid`, `type`, `count`) value (?, ?, ?, ?)";
             PreparedStatement preparedStatement = connection.prepareStatement(sql);
-            preparedStatement.setDate(1, new Date(value.getWindowEnd()));
+            preparedStatement.setTimestamp(1, new Timestamp(value.getWindowEnd()));
             preparedStatement.setString(2, value.getAppid());
             preparedStatement.setInt(3, value.getType());
             preparedStatement.setLong(4, value.getCount());
