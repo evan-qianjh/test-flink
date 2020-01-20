@@ -38,6 +38,9 @@ public class HotMediaTrack {
     // 2020-01-18 16:59:58,710 # {"ad_channel_id":465,"ad_id":180,"ad_link_id":3958,"ad_publish_id":116808,"ad_send_code":"078494fa5a21246d","ad_source":"xrm12z","app_vc":"1","app_vn":"1.0","appid":"281572317291614","brand":"Honor","bssid":"24:69:68:33:0a:c0","carrier":"0","cid":"0","click_from":2,"creative_id":26376,"creative_style":8,"delivery_id":148081,"down_x":-999,"down_y":-999,"event_time":1579337996,"event_type":2,"force_pull":100,"imei":"861142031794199","interaction_type":3,"lac":"0","language":"CN","lat":30.417479,"log_time":1579337998710,"lon":113.406448,"mac":"94:fe:22:d1:11:5d","mcc":"0","model":"SCL-TL00","network":"1","network_type":"2","nonce":0.1201206090638749,"os_api_level":"22","os_type":"1","os_version":"5.1.1","pdid":"b08a227d54f7dad8","pkg_name":"com.kub.nyi","psdk_ver":"1807070020","req_id":"4480e506445369_s","req_ip":"117.155.172.197","req_src":"self","screen":"1196*720","screen_density":"320","screen_orientation":"2","timestamp":1579308458,"up_x":-999,"up_y":-999,"usid":"e19d5bf8e18a63931faae516bacb517d"}
 
     private static final String PARAM_KAFKA_URL = "kafka_url";
+    private static final String PARAM_MYSQL_URL = "mysql_url";
+    private static final String PARAM_MYSQL_USERNAME = "mysql_username";
+    private static final String PARAM_MYSQL_PASSWORD = "mysql_password";
 
     public static void main(String[] args) throws Exception {
         // 初始化
@@ -92,23 +95,24 @@ public class HotMediaTrack {
         env.execute("track count");
     }
 
-    static class MySqlSink extends RichSinkFunction<MediaTrackCount> {
+    static class MySqlSink extends RichSinkFunction<LogTrackPoint> {
         private Connection connection;
 
         @Override
         public void open(Configuration parameters) throws Exception {
             super.open(parameters);
+            ParameterTool parameter = (ParameterTool) getRuntimeContext().getExecutionConfig().getGlobalJobParameters();
 
-            String url = "jdbc:mysql://192.168.1.131:3306/adx_dw_dev?useUnicode=true&characterEncoding=utf8&useSSL=false&autoReconnect=true&useCursorFetch=true";
-            String username = "adx_dw";
-            String password = "adx_dw";
+            String url = parameter.get(PARAM_MYSQL_URL);
+            String username = parameter.get(PARAM_MYSQL_USERNAME);
+            String password = parameter.get(PARAM_MYSQL_PASSWORD);
 
             Class.forName("com.mysql.cj.jdbc.Driver");
             connection = DriverManager.getConnection(url, username, password);
         }
 
         @Override
-        public void invoke(MediaTrackCount value, Context context) throws Exception {
+        public void invoke(LogTrackPoint value, Context context) throws Exception {
             String sql = "insert into log_track_point (`time`, `appid`, `type`, `count`) value (?, ?, ?, ?)";
             PreparedStatement preparedStatement = connection.prepareStatement(sql);
             preparedStatement.setDate(1, new Date(value.getWindowEnd()));
@@ -127,12 +131,12 @@ public class HotMediaTrack {
     }
 
 
-    static class WindowResult implements WindowFunction<Long, MediaTrackCount, Tuple, TimeWindow> {
+    static class WindowResult implements WindowFunction<Long, LogTrackPoint, Tuple, TimeWindow> {
         @Override
-        public void apply(Tuple tuple, TimeWindow timeWindow, Iterable<Long> iterable, Collector<MediaTrackCount> collector) throws Exception {
+        public void apply(Tuple tuple, TimeWindow timeWindow, Iterable<Long> iterable, Collector<LogTrackPoint> collector) throws Exception {
             Tuple2<String, Integer> appidAndType = (Tuple2<String, Integer>) tuple;
 
-            collector.collect(MediaTrackCount.builder()
+            collector.collect(LogTrackPoint.builder()
                     .appid(appidAndType.f0)
                     .type(appidAndType.f1)
                     .windowEnd(timeWindow.getEnd())
@@ -202,11 +206,14 @@ public class HotMediaTrack {
         }
     }
 
+    /**
+     * 日志保存点
+     */
     @Data
     @AllArgsConstructor
     @NoArgsConstructor
     @Builder(toBuilder = true)
-    static class MediaTrackCount {
+    static class LogTrackPoint {
         private String appid;
         private Integer type;
         private Long windowEnd;
